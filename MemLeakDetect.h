@@ -1,6 +1,6 @@
 #pragma once
 
-//#define _USE_MEM_LEAK_DETECT
+#define _USE_MEM_LEAK_DETECT
 
 #if defined(_MSC_VER) && defined(_DEBUG) && defined(_USE_MEM_LEAK_DETECT)
 
@@ -22,6 +22,11 @@ class MemoryLeakDetect
 public:
 	static MemoryLeakDetect* GetInstance();
 	static bool IsProcessing();
+
+	~MemoryLeakDetect()
+	{
+		Dump();
+	}
 	
 	void Register(void* pvPointer, size_t uSize, const char* cpszFile, int nLineNum, const char* cpszFunc);
 	void Unregister(void* pvPointer);
