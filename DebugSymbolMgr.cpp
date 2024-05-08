@@ -1,5 +1,3 @@
-#include "stdafx.h"
-
 #if defined(_MSC_VER) && defined(_DEBUG)
 
 #include "DebugSymbolMgr.h"
@@ -44,6 +42,15 @@ void DebugSymbolMgr::Refresh()
 	if (m_hProcess)
 		SymRefreshModuleList(m_hProcess);
 }
+
+static const char* s_szIgnoreSystemFileNames[] =
+{
+	"Microsoft",
+	"\\crt\\",
+	"KG_Memory.cpp",
+	"KG_Memory.h"
+
+};
 
 bool DebugSymbolMgr::GetCallInfo(
 	_Out_ char szFile[], size_t uFileBufferSize,
@@ -92,16 +99,25 @@ bool DebugSymbolMgr::GetCallInfo(
 
 		if (SymGetLineFromAddr64(hCurrentProcess, ullAddress, &dwDisplacementLine, &Line))
 		{
-			if (strstr(Line.FileName, "Microsoft"))
-				continue;
+			bool bIgnore = false;
+			for (const char* cpszIgnore : s_szIgnoreSystemFileNames)
+				if (strstr(Line.FileName, cpszIgnore))
+				{
+					bIgnore = true;
+					break;
+				}
 
-			if (strstr(Line.FileName, "\\crt\\"))
+			if (bIgnore)
 				continue;
 
 			if (szFile && uFileBufferSize > 0)
 				strncpy(szFile, Line.FileName, uFileBufferSize);
 			if (szFunc && uFuncBufferSize)
 				strncpy(szFunc, pSymbol->Name, uFuncBufferSize);
+
+			szFile[uFileBufferSize - 1] = '\0';
+			szFunc[uFuncBufferSize - 1] = '\0';
+
 			*pnLineNum = Line.LineNumber;
 
 			return true;

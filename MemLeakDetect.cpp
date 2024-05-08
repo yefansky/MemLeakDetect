@@ -1,13 +1,10 @@
-#include "stdafx.h"
-
-#ifdef _USE_MEM_LEAK_DETECT
-
 #include "MemLeakDetect.h"
+#include "DebugSymbolMgr.h"
 
 #undef malloc
 #undef free
 
-bool MemoryLeakDetect::s_bProcessing = false;
+volatile bool MemoryLeakDetect::s_bProcessing = false;
 std::mutex MemoryLeakDetect::s_symbolMutex;
 
 MemoryLeakDetect* MemoryLeakDetect::GetInstance()
@@ -130,6 +127,9 @@ void MemoryLeakDetect::Dump()
 		const void* pvPointer = rInfoPair.first;
 		auto& rInfo = rInfoPair.second;
 
+		if (rInfo.bIsGlobal)
+			continue;
+
 		printf("MemoryLeakDetect: address:%p size:%lld, path:%s, line:%d, func:%s\n",
 			pvPointer, rInfo.uSize, rInfo.strFile.c_str(), rInfo.nLineNum, rInfo.strFuncName.c_str()
 		);
@@ -145,6 +145,15 @@ void MemoryLeakDetect::Dump()
 		fclose(pfFile);
 
 	s_symbolMutex.unlock();
+}
+
+void MemoryLeakDetect::MarkGlobal()
+{
+	for (auto& rInfoPair : m_infoMap)
+	{
+		auto& rInfo = rInfoPair.second;
+		rInfo.bIsGlobal = true;
+	}
 }
 
 void* operator new(size_t uSize)
@@ -204,5 +213,3 @@ void _DETECT_LEAK_delete(void* pvPointer)
 		MemoryLeakDetect::GetInstance()->Unregister(pvPointer);
 	free(pvPointer);
 }
-
-#endif // _USE_MEM_LEAK_DETECT

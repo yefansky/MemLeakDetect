@@ -15,10 +15,19 @@
 #include <dbghelp.h>
 #include <mutex>
 #include <assert.h>
-#include "DebugSymbolMgr.h"
 
 class MemoryLeakDetect
 {
+	// 使用原生的 new 操作符
+	void* operator new(size_t size) {
+		return ::operator new(size);
+	}
+
+	// 使用原生的 delete 操作符
+	void operator delete(void* ptr) noexcept {
+		::operator delete(ptr);
+	}
+
 public:
 	static MemoryLeakDetect* GetInstance();
 	static bool IsProcessing();
@@ -32,16 +41,18 @@ public:
 	void Unregister(void* pvPointer);
 
 	void Dump();
+	void MarkGlobal();
 private:
 	struct BlockInfo
 	{
+		bool bIsGlobal = false;
 		std::string strFile;
-		int nLineNum;
+		int nLineNum = -1;
 		std::string strFuncName;
-		size_t uSize;
+		size_t uSize = 0;
 	};
 	std::map<const void*, BlockInfo> m_infoMap;
-	static bool s_bProcessing;
+	volatile static bool s_bProcessing;
 
 	static std::mutex s_symbolMutex;
 };
@@ -56,5 +67,25 @@ void _DETECT_LEAK_delete(void* pvPointer);
 
 #define malloc(_SIZE) _DETECT_LEAK_malloc(_SIZE, __FILE__, __LINE__, __FUNCTION__)
 #define free(_POINTER) _DETECT_LEAK_delete(_POINTER)
+
+
+struct MemoryLeakDetectGuard
+{
+	MemoryLeakDetect* pDetect = nullptr;
+
+	MemoryLeakDetectGuard()
+	{
+		pDetect = MemoryLeakDetect::GetInstance();
+		pDetect->MarkGlobal();
+	}
+
+	~MemoryLeakDetectGuard()
+	{
+		pDetect->Dump();
+	}
+
+};
+
+#define MEMORY_LEAK_DETECT_INIT() static MemoryLeakDetectGuard _MemoryLeakDetectGuard;
 
 #endif // _MSVC_ && _DEBUG

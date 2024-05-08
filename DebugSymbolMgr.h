@@ -15,7 +15,7 @@ public:
 	{
 		char szFile[MAX_PATH] = "";
 		int nLineNum = 0;
-		char szFunc[64] = "";
+		char szFunc[128] = "";
 	};
 
 private:
