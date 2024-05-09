@@ -4,7 +4,6 @@
 #undef malloc
 #undef free
 
-volatile bool MemoryLeakDetect::s_bProcessing = false;
 std::mutex MemoryLeakDetect::s_symbolMutex;
 
 MemoryLeakDetect* MemoryLeakDetect::GetInstance()
@@ -15,9 +14,7 @@ MemoryLeakDetect* MemoryLeakDetect::GetInstance()
 
 	if (!s_pInstance)
 	{
-		s_bProcessing = true;
 		s_pInstance = new MemoryLeakDetect();
-		s_bProcessing = false;
 	}
 
 	s_symbolMutex.unlock();
@@ -25,16 +22,9 @@ MemoryLeakDetect* MemoryLeakDetect::GetInstance()
 	return s_pInstance;
 }
 
-bool MemoryLeakDetect::IsProcessing()
-{
-	return s_bProcessing;
-}
-
 void MemoryLeakDetect::Register(void* pvPointer, size_t uSize, const char* cpszFile, int nLineNum, const char* cpszFunc)
 {
 	s_symbolMutex.lock();
-
-	s_bProcessing = true;
 
 	BlockInfo info;
 	info.strFile = cpszFile;
@@ -43,7 +33,6 @@ void MemoryLeakDetect::Register(void* pvPointer, size_t uSize, const char* cpszF
 	info.uSize = uSize;
 
 	m_infoMap.emplace(pvPointer, info);
-	s_bProcessing = false;
 
 	s_symbolMutex.unlock();
 }
@@ -52,9 +41,7 @@ void MemoryLeakDetect::Unregister(void* pvPointer)
 {
 	s_symbolMutex.lock();
 
-	s_bProcessing = true;
 	m_infoMap.erase(pvPointer);
-	s_bProcessing = false;
 
 	s_symbolMutex.unlock();
 }
@@ -121,7 +108,6 @@ void MemoryLeakDetect::Dump()
 	GetLogFileName(szFileName, sizeof(szFileName));
 	FILE* pfFile = fopen(szFileName, "w+");
 
-	s_bProcessing = true;
 	for (auto& rInfoPair : m_infoMap)
 	{
 		const void* pvPointer = rInfoPair.first;
@@ -139,7 +125,6 @@ void MemoryLeakDetect::Dump()
 				pvPointer, rInfo.uSize, rInfo.strFile.c_str(), rInfo.nLineNum, rInfo.strFuncName.c_str()
 			);
 	}
-	s_bProcessing = false;
 
 	if (pfFile)
 		fclose(pfFile);
@@ -159,7 +144,7 @@ void MemoryLeakDetect::MarkGlobal()
 void* operator new(size_t uSize)
 {
 	void* pvPointer = malloc(uSize);
-	if (pvPointer && !MemoryLeakDetect::IsProcessing())
+	if (pvPointer)
 	{
 		DebugSymbolMgr::CallInfo callInfo;
 		DebugSymbolMgr::GetCallInfo(
@@ -178,7 +163,7 @@ void* operator new(size_t uSize, int nCount)
 {
 	uSize *= nCount;
 	void* pvPointer = malloc(uSize);
-	if (pvPointer && !MemoryLeakDetect::IsProcessing())
+	if (pvPointer)
 	{
 		DebugSymbolMgr::CallInfo callInfo;
 		DebugSymbolMgr::GetCallInfo(
@@ -194,22 +179,23 @@ void* operator new(size_t uSize, int nCount)
 
 void operator delete(void* pvPointer)
 {
-	if (pvPointer && !MemoryLeakDetect::IsProcessing())
-		MemoryLeakDetect::GetInstance()->Unregister(pvPointer);
+	assert(pvPointer);
+	
+	MemoryLeakDetect::GetInstance()->Unregister(pvPointer);
 	free(pvPointer);
 }
 
 void* _DETECT_LEAK_malloc(size_t uSize, const char* cpszFile, int nLine, const char* cpszFunc)
 {
 	void* pvPointer = malloc(uSize);
-	if (pvPointer && !MemoryLeakDetect::IsProcessing())
+	if (pvPointer)
 		MemoryLeakDetect::GetInstance()->Register(pvPointer, uSize, cpszFile, nLine, cpszFunc);
 	return pvPointer;
 }
 
 void _DETECT_LEAK_delete(void* pvPointer)
 {
-	if (pvPointer && !MemoryLeakDetect::IsProcessing())
-		MemoryLeakDetect::GetInstance()->Unregister(pvPointer);
+	assert(pvPointer);
+	MemoryLeakDetect::GetInstance()->Unregister(pvPointer);
 	free(pvPointer);
 }
