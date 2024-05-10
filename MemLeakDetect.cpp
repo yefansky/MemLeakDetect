@@ -4,27 +4,26 @@
 #undef malloc
 #undef free
 
-std::mutex MemoryLeakDetect::s_symbolMutex;
-
 MemoryLeakDetect* MemoryLeakDetect::GetInstance()
 {
-	s_symbolMutex.lock();
+	static std::mutex s_mutex;
 
-	static MemoryLeakDetect* s_pInstance = nullptr;
+	MemoryLeakDetect* pResult = nullptr;
 
-	if (!s_pInstance)
-	{
-		s_pInstance = new MemoryLeakDetect();
-	}
+	s_mutex.lock();
 
-	s_symbolMutex.unlock();
+	static MemoryLeakDetect s_Instance;
 
-	return s_pInstance;
+	pResult = &s_Instance;
+
+	s_mutex.unlock();
+
+	return pResult;
 }
 
 void MemoryLeakDetect::Register(void* pvPointer, size_t uSize, const char* cpszFile, int nLineNum, const char* cpszFunc)
 {
-	s_symbolMutex.lock();
+	m_symbolMutex.lock();
 
 	BlockInfo info;
 	info.strFile = cpszFile;
@@ -34,16 +33,16 @@ void MemoryLeakDetect::Register(void* pvPointer, size_t uSize, const char* cpszF
 
 	m_infoMap.emplace(pvPointer, info);
 
-	s_symbolMutex.unlock();
+	m_symbolMutex.unlock();
 }
 
 void MemoryLeakDetect::Unregister(void* pvPointer)
 {
-	s_symbolMutex.lock();
+	m_symbolMutex.lock();
 
 	m_infoMap.erase(pvPointer);
 
-	s_symbolMutex.unlock();
+	m_symbolMutex.unlock();
 }
 
 // 函数用于获取当前时间的字符串表示
@@ -102,7 +101,7 @@ static void GetLogFileName(char* pszBuffer, size_t uBufferName)
 
 void MemoryLeakDetect::Dump()
 {
-	s_symbolMutex.lock();
+	m_symbolMutex.lock();
 
 	char szFileName[128];
 	GetLogFileName(szFileName, sizeof(szFileName));
@@ -129,7 +128,7 @@ void MemoryLeakDetect::Dump()
 	if (pfFile)
 		fclose(pfFile);
 
-	s_symbolMutex.unlock();
+	m_symbolMutex.unlock();
 }
 
 void MemoryLeakDetect::MarkGlobal()

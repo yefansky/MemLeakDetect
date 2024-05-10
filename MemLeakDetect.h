@@ -149,7 +149,7 @@ private:
 	};
 	_map<const void*, BlockInfo> m_infoMap;
 
-	static std::mutex s_symbolMutex;
+	std::mutex m_symbolMutex;
 };
 
 void* operator new(size_t uSize);
